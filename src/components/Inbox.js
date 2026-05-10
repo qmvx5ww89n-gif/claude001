@@ -9,9 +9,11 @@
  *   5. 收集箱条目列表：展示、删除
  */
 
-import { inboxStore } from '../services/storage.js';
+import { inboxStore, requirementStore, todoStore } from '../services/storage.js';
 import { parse } from '../services/parser.js';
 import { aiParse, hasApiKey } from '../services/aiParser.js';
+import { convertFromInbox } from './RequirementsTasks.js';
+import { syncAll } from '../services/cliSync.js';
 
 /** 当前规则解析结果 */
 let currentParsed = null;
@@ -33,6 +35,7 @@ const ICONS = {
   note: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>`,
   loader: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="6" class="spinner__line"/><line x1="12" y1="18" x2="12" y2="22" class="spinner__line"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76" class="spinner__line"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07" class="spinner__line"/><line x1="2" y1="12" x2="6" y2="12" class="spinner__line"/><line x1="18" y1="12" x2="22" y2="12" class="spinner__line"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24" class="spinner__line"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93" class="spinner__line"/></svg>`,
   check: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  terminal: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`,
 };
 
 /* ================================================================== */
@@ -66,6 +69,10 @@ function render(container) {
           <button class="inbox__clipboard-btn" id="inbox-btn-clipboard">
             ${ICONS.clipboard}
             <span>从剪贴板读取</span>
+          </button>
+          <button class="inbox__cli-btn" id="inbox-btn-cli" title="从 CLI 同步任务 (需启动 node server.js)">
+            ${ICONS.terminal}
+            <span>CLI 同步</span>
           </button>
           <button class="inbox__ai-btn" id="inbox-btn-ai" title="使用大模型智能解析任务文本">
             ${ICONS.sparkle}
@@ -102,6 +109,7 @@ function render(container) {
 function renderItem(item) {
   const parsed = parse(item.content);
   const hasMeta = parsed.dateLabel || parsed.timeLabel;
+  const isConverted = isItemConverted(item.id);
 
   return `
     <div class="inbox-item" data-id="${item.id}">
@@ -115,6 +123,10 @@ function renderItem(item) {
         ` : ''}
       </div>
       <div class="inbox-item__actions">
+        ${isConverted
+          ? `<span class="inbox-item__converted-badge" title="已转化为需求">已转化</span>`
+          : `<button class="btn-icon btn-icon--sm inbox-item__convert" data-id="${item.id}" title="转化为需求">${ICONS.plus}</button>`
+        }
         <span class="inbox-item__source" title="来源: ${item.source}">${sourceLabel(item.source)}</span>
         <button class="btn-icon btn-icon--sm inbox-item__delete" data-id="${item.id}" title="删除">
           ${ICONS.trash}
@@ -122,6 +134,12 @@ function renderItem(item) {
       </div>
     </div>
   `;
+}
+
+/** 检查收集箱条目是否已转化为需求 */
+function isItemConverted(inboxId) {
+  const reqs = requirementStore.getAll();
+  return reqs.some((r) => r.sourceInboxId === inboxId);
 }
 
 /** 渲染规则引擎解析预览 */
@@ -422,6 +440,7 @@ export function init(container) {
   const textarea = document.querySelector('#inbox-input');
   const addBtn = document.querySelector('#inbox-btn-add');
   const clipboardBtn = document.querySelector('#inbox-btn-clipboard');
+  const cliBtn = document.querySelector('#inbox-btn-cli');
   const aiBtn = document.querySelector('#inbox-btn-ai');
   const clearTextBtn = document.querySelector('#inbox-btn-clear-text');
   const listEl = document.querySelector('#inbox-list');
@@ -477,13 +496,55 @@ export function init(container) {
     }
   });
 
+  /* ---- CLI / 外部同步 ---- */
+  cliBtn.addEventListener('click', async () => {
+    if (cliBtn.disabled) return;
+
+    cliBtn.disabled = true;
+    const origHTML = cliBtn.innerHTML;
+    cliBtn.innerHTML = `${ICONS.loader} <span>同步中...</span>`;
+
+    try {
+      const counts = await syncAll({ inboxStore, requirementStore, todoStore });
+      const total = counts.inbox + counts.requirements + counts.todos;
+      if (total > 0) {
+        const parts = [];
+        if (counts.inbox > 0) parts.push(`收集箱 ${counts.inbox}`);
+        if (counts.requirements > 0) parts.push(`需求 ${counts.requirements}`);
+        if (counts.todos > 0) parts.push(`待办 ${counts.todos}`);
+        refreshList();
+        cliBtn.innerHTML = `${ICONS.check} <span>已同步 ${parts.join('、')}</span>`;
+      } else {
+        cliBtn.innerHTML = `${ICONS.terminal} <span>无新内容</span>`;
+      }
+    } finally {
+      cliBtn.disabled = false;
+      setTimeout(() => {
+        cliBtn.innerHTML = origHTML;
+      }, 2500);
+    }
+  });
+
   /* ---- AI 智能解析 ---- */
   aiBtn.addEventListener('click', () => {
     triggerAiParse();
   });
 
-  /* ---- 列表操作：删除 ---- */
+  /* ---- 列表操作：删除 / 转化 ---- */
   listEl.addEventListener('click', (e) => {
+    // 转化为需求
+    const convertBtn = e.target.closest('.inbox-item__convert');
+    if (convertBtn) {
+      const id = convertBtn.dataset.id;
+      const item = inboxStore.getById(id);
+      if (item) {
+        convertFromInbox(item);
+        refreshList();
+      }
+      return;
+    }
+
+    // 删除
     const deleteBtn = e.target.closest('.inbox-item__delete');
     if (!deleteBtn) return;
 

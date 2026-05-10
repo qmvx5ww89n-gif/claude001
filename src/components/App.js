@@ -16,25 +16,25 @@
 
 import { init as initNavbar } from './Navbar.js';
 import { init as initInbox } from './Inbox.js';
+import { init as initRequirementsTasks } from './RequirementsTasks.js';
+import { init as initTodos } from './Todos.js';
 import { getApiKey, saveApiKey, hasApiKey, getProviders, getSelectedProvider, saveProvider, getAllKeys, removeApiKey } from '../services/aiParser.js';
 
 /** 当前活跃的视图名称 */
 let currentView = 'inbox';
 
-/** 各视图的初始化函数映射（后续步骤逐步替换占位为真实组件） */
+/** 各视图的初始化函数映射 */
 const viewInitializers = {
   inbox: initInbox,
-  requirements: null,   // 下一步实现
-  taskOrders: null,     // 下一步实现
-  todos: null,          // 下一步实现
+  'requirements-tasks': initRequirementsTasks,
+  todos: initTodos,
 };
 
 /** 各视图的占位 DOM（当对应 initializer 尚未实现时使用） */
 function renderPlaceholder(view) {
   const labels = {
     inbox: '收集箱',
-    requirements: '需求',
-    taskOrders: '任务单',
+    'requirements-tasks': '需求·任务',
     todos: '待办',
   };
 
