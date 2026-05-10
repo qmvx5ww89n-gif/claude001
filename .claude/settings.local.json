@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm /Users/renxinghua/my-task/src/counter.js /Users/renxinghua/my-task/src/style.css)",
+      "Bash(rm -rf /Users/renxinghua/my-task/src/assets)",
+      "Bash(npx vite *)",
+      "Bash(node -e ' *)",
+      "Bash(open http://localhost:3000/)"
+    ]
+  }
+}
