@@ -9,10 +9,11 @@
  *   5. 收集箱条目列表：展示、删除
  */
 
-import { inboxStore, requirementStore, todoStore } from '../services/storage.js';
+import { inboxStore, requirementStore, planStore, todoStore } from '../services/storage.js';
 import { parse } from '../services/parser.js';
 import { aiParse, hasApiKey } from '../services/aiParser.js';
 import { convertFromInbox } from './RequirementsTasks.js';
+import { convertToPlan } from './Plans.js';
 import { syncAll } from '../services/cliSync.js';
 
 /** 当前规则解析结果 */
@@ -32,6 +33,7 @@ const ICONS = {
   clock: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
   tag: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
   flag: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`,
+  target: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
   note: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>`,
   loader: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="6" class="spinner__line"/><line x1="12" y1="18" x2="12" y2="22" class="spinner__line"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76" class="spinner__line"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07" class="spinner__line"/><line x1="2" y1="12" x2="6" y2="12" class="spinner__line"/><line x1="18" y1="12" x2="22" y2="12" class="spinner__line"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24" class="spinner__line"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93" class="spinner__line"/></svg>`,
   check: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
@@ -124,8 +126,9 @@ function renderItem(item) {
       </div>
       <div class="inbox-item__actions">
         ${isConverted
-          ? `<span class="inbox-item__converted-badge" title="已转化为需求">已转化</span>`
-          : `<button class="btn-icon btn-icon--sm inbox-item__convert" data-id="${item.id}" title="转化为需求">${ICONS.plus}</button>`
+          ? `<span class="inbox-item__converted-badge" title="已转化">已转化</span>`
+          : `<button class="btn-icon btn-icon--sm inbox-item__convert" data-id="${item.id}" title="转化为需求" style="color:var(--color-accent)">${ICONS.plus}</button>
+             <button class="btn-icon btn-icon--sm inbox-item__convert-plan" data-id="${item.id}" title="转化为计划" style="color:#059669">${ICONS.target}</button>`
         }
         <span class="inbox-item__source" title="来源: ${item.source}">${sourceLabel(item.source)}</span>
         <button class="btn-icon btn-icon--sm inbox-item__delete" data-id="${item.id}" title="删除">
@@ -136,10 +139,12 @@ function renderItem(item) {
   `;
 }
 
-/** 检查收集箱条目是否已转化为需求 */
+/** 检查收集箱条目是否已转化为需求或计划 */
 function isItemConverted(inboxId) {
   const reqs = requirementStore.getAll();
-  return reqs.some((r) => r.sourceInboxId === inboxId);
+  const plans = planStore.getAll();
+  return reqs.some((r) => r.sourceInboxId === inboxId)
+      || plans.some((p) => p.sourceInboxId === inboxId);
 }
 
 /** 渲染规则引擎解析预览 */
@@ -539,6 +544,18 @@ export function init(container) {
       const item = inboxStore.getById(id);
       if (item) {
         convertFromInbox(item);
+        refreshList();
+      }
+      return;
+    }
+
+    // 转化为计划
+    const convertPlanBtn = e.target.closest('.inbox-item__convert-plan');
+    if (convertPlanBtn) {
+      const id = convertPlanBtn.dataset.id;
+      const item = inboxStore.getById(id);
+      if (item) {
+        convertToPlan(item);
         refreshList();
       }
       return;

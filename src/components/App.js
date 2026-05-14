@@ -16,16 +16,19 @@
 
 import { init as initNavbar } from './Navbar.js';
 import { init as initInbox } from './Inbox.js';
+import { init as initPlans } from './Plans.js';
 import { init as initRequirementsTasks } from './RequirementsTasks.js';
 import { init as initTodos } from './Todos.js';
 import { getApiKey, saveApiKey, hasApiKey, getProviders, getSelectedProvider, saveProvider, getAllKeys, removeApiKey } from '../services/aiParser.js';
+import { inboxStore, migrateIfNeeded } from '../services/storage.js';
 
 /** 当前活跃的视图名称 */
-let currentView = 'inbox';
+let currentView;
 
 /** 各视图的初始化函数映射 */
 const viewInitializers = {
   inbox: initInbox,
+  plans: initPlans,
   'requirements-tasks': initRequirementsTasks,
   todos: initTodos,
 };
@@ -34,6 +37,7 @@ const viewInitializers = {
 function renderPlaceholder(view) {
   const labels = {
     inbox: '收集箱',
+    plans: '计划',
     'requirements-tasks': '需求·任务',
     todos: '待办',
   };
@@ -150,6 +154,7 @@ export function init() {
   app.innerHTML = `
     <header class="app-header">
       <h1 class="app-header__title">My Task</h1>
+      <nav class="app-navbar" id="app-navbar"></nav>
       <div class="app-header__actions">
         <button class="btn-icon" id="btn-settings" title="设置（API Key）">
           ${ICONS.settings}
@@ -161,8 +166,6 @@ export function init() {
     </header>
 
     <main class="app-main" id="app-main"></main>
-
-    <footer class="app-navbar" id="app-navbar"></footer>
   `;
 
   /* ---- 引用元素 ---- */
@@ -184,10 +187,21 @@ export function init() {
     }
   }
 
+  // 数据迁移
+  migrateIfNeeded();
+
+  // 首次使用自动填充模拟数据
+  seedDemoData();
+
+  // 默认视图：收集箱有内容则打开收集箱，否则打开待办
+  if (!currentView) {
+    const inboxItems = inboxStore.getAll();
+    currentView = inboxItems.length > 0 ? 'inbox' : 'todos';
+  }
   switchView(currentView);
 
   /* ---- 初始化导航栏 ---- */
-  initNavbar(navbarEl);
+  initNavbar(navbarEl, currentView);
 
   navbarEl.addEventListener('nav-change', (e) => {
     switchView(e.detail.view);
@@ -359,4 +373,83 @@ export function init() {
   });
 
   console.log('[App] 应用启动完成，当前视图:', currentView);
+}
+
+/** 首次使用时填充模拟数据 */
+function seedDemoData() {
+  const seeded = localStorage.getItem('mytask_seeded');
+  if (seeded) return;
+
+  const PREFIX = 'mytask_';
+
+  const inbox = [
+    { id: crypto.randomUUID(), content: '明天下午3点跟产品团队评审需求文档', source: 'manual', createdAt: new Date(Date.now() - 86400000 * 2).toISOString() },
+    { id: crypto.randomUUID(), content: '李明：周五之前把用户增长方案初稿发出来', source: 'manual', createdAt: new Date(Date.now() - 86400000 * 3).toISOString() },
+    { id: crypto.randomUUID(), content: '5月20日 提交Q2季度预算审批', source: 'clipboard', createdAt: new Date(Date.now() - 86400000).toISOString() },
+    { id: crypto.randomUUID(), content: '下周一上午10点 周会准备演示文稿', source: 'manual', createdAt: new Date(Date.now() - 86400000 * 4).toISOString() },
+    { id: crypto.randomUUID(), content: '这周末之前把技术方案对比文档写完', source: 'manual', createdAt: new Date(Date.now() - 86400000 * 5).toISOString() },
+  ];
+
+  const plan1Id = crypto.randomUUID();
+  const plan2Id = crypto.randomUUID();
+  const plans = [
+    { id: plan1Id, title: '完成Q2性能优化专项', estimatedHours: 12, deadline: '2026-05-25', status: 'active', sourceInboxId: null, createdAt: new Date().toISOString(), completedAt: null },
+    { id: plan2Id, title: '搭建自动化测试体系', estimatedHours: 20, deadline: '2026-06-05', status: 'active', sourceInboxId: null, createdAt: new Date().toISOString(), completedAt: null },
+  ];
+
+  const req1Id = crypto.randomUUID();
+  const req2Id = crypto.randomUUID();
+  const req3Id = crypto.randomUUID();
+  const req4Id = crypto.randomUUID();
+  const req5Id = crypto.randomUUID();
+
+  const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const dayAfter = new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0];
+  const nextMonday = new Date(Date.now() + 86400000 * 4).toISOString().split('T')[0];
+  const may20 = '2026-05-20';
+  const friday = new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0];
+
+  const requirements = [
+    { id: req1Id, title: '产品需求文档评审', sourceInboxId: inbox[0].id, status: 'active', estimatedHours: 3, deadline: tomorrow, createdAt: new Date().toISOString(), completedAt: null },
+    { id: req2Id, title: '用户增长方案初稿', sourceInboxId: inbox[1].id, status: 'active', estimatedHours: 8, deadline: friday, createdAt: new Date().toISOString(), completedAt: null },
+    { id: req3Id, title: 'Q2季度预算审批', sourceInboxId: inbox[2].id, status: 'active', estimatedHours: 2, deadline: may20, createdAt: new Date().toISOString(), completedAt: null },
+    { id: req4Id, title: '技术方案对比文档', sourceInboxId: inbox[4].id, status: 'active', estimatedHours: 6, deadline: friday, createdAt: new Date().toISOString(), completedAt: null },
+    { id: req5Id, title: '旧版数据迁移方案（已完成）', sourceInboxId: null, status: 'completed', estimatedHours: 10, deadline: '2026-04-30', createdAt: new Date(Date.now() - 86400000 * 30).toISOString(), completedAt: new Date(Date.now() - 86400000 * 20).toISOString() },
+  ];
+
+  const taskOrderId = crypto.randomUUID();
+  const taskOrders = [
+    { id: taskOrderId, name: 'Q2 重点推进项目', requirementIds: [req1Id, req2Id, req3Id], planIds: [plan1Id], estimatedHours: 13, deadline: friday, status: 'active', createdAt: new Date().toISOString(), completedAt: null },
+  ];
+
+  function yesterday() {
+    const d = new Date(Date.now() - 86400000);
+    return d.toISOString().split('T')[0];
+  }
+
+  const todos = [
+    { id: crypto.randomUUID(), title: '整理评审会议纪要', sourceType: 'requirement', sourceId: req1Id, dueDate: today, isCompleted: false, isStarred: true, completedAt: null, createdAt: new Date().toISOString() },
+    { id: crypto.randomUUID(), title: '发会议邀请给产品团队', sourceType: 'requirement', sourceId: req1Id, dueDate: yesterday(), isCompleted: true, isStarred: false, completedAt: new Date(Date.now() - 86400000).toISOString(), createdAt: new Date(Date.now() - 86400000 * 2).toISOString() },
+    { id: crypto.randomUUID(), title: '收集各渠道用户增长数据', sourceType: 'requirement', sourceId: req2Id, dueDate: friday, isCompleted: false, isStarred: true, completedAt: null, createdAt: new Date().toISOString() },
+    { id: crypto.randomUUID(), title: '草拟增长方案框架', sourceType: 'requirement', sourceId: req2Id, dueDate: tomorrow, isCompleted: false, isStarred: false, completedAt: null, createdAt: new Date().toISOString() },
+    { id: crypto.randomUUID(), title: '整理Q2各项目预算明细', sourceType: 'requirement', sourceId: req3Id, dueDate: may20, isCompleted: false, isStarred: false, completedAt: null, createdAt: new Date().toISOString() },
+    { id: crypto.randomUUID(), title: '对比竞品技术架构优缺点', sourceType: 'requirement', sourceId: req4Id, dueDate: friday, isCompleted: false, isStarred: false, completedAt: null, createdAt: new Date().toISOString() },
+    { id: crypto.randomUUID(), title: '数据库索引优化', sourceType: 'plan', sourceId: plan1Id, dueDate: today, isCompleted: false, isStarred: true, completedAt: null, createdAt: new Date().toISOString() },
+    { id: crypto.randomUUID(), title: '代码review流程梳理', sourceType: 'plan', sourceId: plan1Id, dueDate: may20, isCompleted: false, isStarred: false, completedAt: null, createdAt: new Date().toISOString() },
+    { id: crypto.randomUUID(), title: '更新项目 README 文档', sourceType: null, sourceId: null, dueDate: tomorrow, isCompleted: false, isStarred: false, completedAt: null, createdAt: new Date().toISOString() },
+    { id: crypto.randomUUID(), title: '整理本周技术分享PPT', sourceType: null, sourceId: null, dueDate: nextMonday, isCompleted: false, isStarred: true, completedAt: null, createdAt: new Date().toISOString() },
+    { id: crypto.randomUUID(), title: '预约牙科检查', sourceType: null, sourceId: null, dueDate: dayAfter, isCompleted: false, isStarred: false, completedAt: null, createdAt: new Date().toISOString() },
+    { id: crypto.randomUUID(), title: '回复合作方邮件', sourceType: null, sourceId: null, dueDate: today, isCompleted: true, isStarred: false, completedAt: new Date(Date.now() - 86400000).toISOString(), createdAt: new Date().toISOString() },
+  ];
+
+  localStorage.setItem(PREFIX + 'inbox', JSON.stringify(inbox));
+  localStorage.setItem(PREFIX + 'plans', JSON.stringify(plans));
+  localStorage.setItem(PREFIX + 'requirements', JSON.stringify(requirements));
+  localStorage.setItem(PREFIX + 'taskOrders', JSON.stringify(taskOrders));
+  localStorage.setItem(PREFIX + 'todos', JSON.stringify(todos));
+  localStorage.setItem('mytask_data_version', '2');
+  localStorage.setItem('mytask_seeded', '1');
+
+  console.log('[App] 已填充模拟数据，刷新页面后生效');
 }

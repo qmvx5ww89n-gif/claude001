@@ -209,12 +209,13 @@ textarea:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 48px;
+  height: 56px;
   padding: 0 var(--space-lg);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
   -webkit-app-region: drag;     /* Electron 风格：顶部可拖拽 */
   user-select: none;
+  gap: var(--space-md);
 }
 
 .app-header__title {
@@ -222,6 +223,7 @@ textarea:focus {
   font-weight: 600;
   color: var(--color-text-primary);
   letter-spacing: -0.3px;
+  flex-shrink: 0;
 }
 
 .app-header__actions {
@@ -229,6 +231,7 @@ textarea:focus {
   align-items: center;
   gap: var(--space-sm);
   -webkit-app-region: no-drag;
+  flex-shrink: 0;
 }
 
 .app-main {
@@ -285,29 +288,30 @@ textarea:focus {
 }
 
 /* ================================================================== */
-/*  Navbar — 底部导航栏                                                */
+/*  Navbar — 顶部导航栏（位于 header 内）                               */
 /* ================================================================== */
 
 .app-navbar {
-  flex-shrink: 0;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg-primary);
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+  align-items: center;
 }
 
 .navbar {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: var(--navbar-height);
-  gap: var(--space-xs);
-  padding: 0 var(--space-md);
+  height: 56px;
+  gap: var(--space-sm);
 }
 
 .navbar__tab {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 6px 14px;
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
   font-size: 13px;
@@ -342,13 +346,13 @@ textarea:focus {
 }
 
 /* 窄屏只显示图标 */
-@media (max-width: 480px) {
+@media (max-width: 540px) {
   .navbar__label {
     display: none;
   }
 
   .navbar__tab {
-    padding: 8px 12px;
+    padding: 6px 10px;
   }
 }
 
@@ -1734,4 +1738,504 @@ textarea:focus {
 /* 需求条目上的拆解按钮 */
 .rt-req-item__breakdown {
   color: var(--color-accent);
+}
+
+/* ---- 需求/任务单卡片 meta 信息 ---- */
+.rt-req-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.rt-to-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.rt-req-item__tag,
+.plan-card__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.tag--hours {
+  background: rgba(100, 116, 139, 0.1);
+  color: #64748b;
+}
+
+.tag--deadline {
+  background: rgba(5, 150, 105, 0.1);
+  color: #059669;
+}
+
+.tag--overdue {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.tag--completed {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+
+.tag--has-todos {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.rt-req-item--inactive,
+.plan-card--inactive {
+  opacity: 0.55;
+}
+
+/* ---- 需求·任务：添加/移除待办按钮 ---- */
+.rt-req-item__add-todo,
+.rt-req-item__remove-todo,
+.plan-card__add-todo,
+.plan-card__remove-todo {
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast);
+}
+
+.rt-req-item__add-todo:hover,
+.plan-card__add-todo:hover {
+  color: var(--color-accent);
+}
+
+.rt-req-item__remove-todo:hover,
+.plan-card__remove-todo:hover {
+  color: #ef4444;
+}
+
+/* ================================================================== */
+/*  计划 (Plans)                                                        */
+/* ================================================================== */
+
+.plan-view {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.plan-toolbar {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.plan-toolbar__title {
+  flex: 1;
+  min-width: 200px;
+  height: 36px;
+  padding: 0 var(--space-md);
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.plan-toolbar__title:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
+  background: var(--color-bg-primary);
+}
+
+.plan-toolbar__hours {
+  width: 80px;
+  height: 36px;
+  padding: 0 var(--space-sm);
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.plan-toolbar__hours:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
+  background: var(--color-bg-primary);
+}
+
+.plan-toolbar__date {
+  width: 140px;
+  height: 36px;
+  padding: 0 var(--space-sm);
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.plan-toolbar__date:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+/* 计划分组 */
+.plan-section {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-md) var(--space-lg);
+  gap: var(--space-xs);
+}
+
+.plan-section__title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-tertiary);
+  padding: var(--space-xs) 0;
+}
+
+.plan-section__count {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-tertiary);
+  padding: 1px 7px;
+  border-radius: 10px;
+  margin-left: var(--space-xs);
+}
+
+.plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.plan-list__empty {
+  padding: var(--space-xl);
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* 计划卡片 */
+.plan-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 12px var(--space-md);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition-fast);
+}
+
+.plan-card:hover {
+  border-color: var(--color-border);
+}
+
+.plan-card__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.plan-card__title {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  line-height: 1.5;
+}
+
+.plan-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.plan-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.plan-card:hover .plan-card__actions {
+  opacity: 1;
+}
+
+/* 计划行内编辑 */
+.plan-inline-input {
+  width: 100%;
+  padding: 2px 6px;
+  font-size: inherit;
+  font-weight: inherit;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+  outline: none;
+}
+
+/* ================================================================== */
+/*  日历 (Calendar)                                                     */
+/* ================================================================== */
+
+.todo-calendar {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+}
+
+.calendar {
+  padding: var(--space-sm) var(--space-lg) var(--space-md);
+}
+
+.calendar--collapsed {
+  padding-bottom: var(--space-xs);
+}
+
+.calendar__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+}
+
+.calendar__month-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  min-width: 100px;
+  text-align: center;
+}
+
+.calendar__nav {
+  color: var(--color-text-tertiary);
+}
+
+.calendar__nav:hover {
+  color: var(--color-text-primary);
+}
+
+.calendar__today {
+  margin-left: auto;
+}
+
+.calendar__clear {
+  font-size: 12px;
+}
+
+.calendar__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calendar__day-names {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+.calendar__day-name {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  padding: 4px 0;
+}
+
+.calendar__weeks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calendar__week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.calendar__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  min-height: 48px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  user-select: none;
+}
+
+.calendar__day:hover {
+  background: var(--color-bg-hover);
+}
+
+.calendar__day--other-month {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.calendar__day--today {
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+
+.calendar__day--selected {
+  background: var(--color-accent-light);
+}
+
+.calendar__day--busy {
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.calendar__day--overload {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.calendar__day--today.calendar__day--busy {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.calendar__day--today.calendar__day--overload {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.calendar__day--selected.calendar__day--busy {
+  background: rgba(245, 158, 11, 0.18);
+}
+
+.calendar__day--selected.calendar__day--overload {
+  background: rgba(239, 68, 68, 0.18);
+}
+
+.calendar__day-num {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.calendar__day-dots {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 10px;
+}
+
+.calendar__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.calendar__dot--plan {
+  background: #22c55e;
+}
+
+.calendar__dot--req {
+  background: var(--color-accent);
+}
+
+.calendar__dot--task {
+  background: #f59e0b;
+}
+
+.calendar__dot-label {
+  font-size: 9px;
+  color: var(--color-text-tertiary);
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* 日历折叠/展开按钮 */
+.todo-filters__calendar-toggle {
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.todo-filters__calendar-toggle:hover {
+  color: var(--color-accent);
+}
+
+/* ================================================================== */
+/*  工时负荷                                                           */
+/* ================================================================== */
+
+.todo-group__workload {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+}
+
+.todo-group__workload.busy {
+  color: #d97706;
+}
+
+.todo-group__workload.overload {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* ================================================================== */
+/*  来源标签颜色扩展                                                    */
+/* ================================================================== */
+
+.source--plan {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+
+/* ================================================================== */
+/*  任务单关联计划标签                                                   */
+/* ================================================================== */
+
+.rt-to-item__plans {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: var(--space-xs);
+}
+
+.rt-to-item__plan-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(34, 197, 94, 0.08);
+  color: #16a34a;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.rt-to-item__plan-unlink {
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.rt-to-item__plan-unlink:hover {
+  opacity: 1;
+  color: #ef4444;
 }

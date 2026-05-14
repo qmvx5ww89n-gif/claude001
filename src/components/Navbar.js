@@ -1,15 +1,16 @@
 /**
- * Navbar.js — 底部导航栏
+ * Navbar.js — 顶部导航栏
  *
- * 三个标签页: 收集箱 | 需求·任务 | 待办
+ * 四个标签页: 待办 | 收集箱 | 计划 | 需求·任务
  * 点击标签时派发自定义 "nav-change" 事件，携带 { view } 标识当前视图。
- * 键盘快捷键 Ctrl+1~3 也可切换。
+ * 键盘快捷键 Ctrl+1~4 也可切换。
  */
 
 const TABS = [
-  { key: 'inbox',              label: '收集箱',     icon: 'inbox' },
-  { key: 'requirements-tasks', label: '需求·任务',   icon: 'requirements' },
   { key: 'todos',              label: '待办',       icon: 'todos' },
+  { key: 'inbox',              label: '收集箱',     icon: 'inbox' },
+  { key: 'plans',              label: '计划',       icon: 'plans' },
+  { key: 'requirements-tasks', label: '需求·任务',   icon: 'requirements' },
 ];
 
 /* ---- 纯 SVG 图标（内联，不依赖外部资源） ---- */
@@ -26,9 +27,12 @@ const ICONS = {
   todos: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
   </svg>`,
+  plans: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+  </svg>`,
 };
 
-export function init(container) {
+export function init(container, initialView = 'todos') {
   /* ---- 构建 DOM ---- */
   container.innerHTML = `
     <nav class="navbar">
@@ -66,9 +70,9 @@ export function init(container) {
     container.dispatchEvent(new CustomEvent('nav-change', { detail: { view }, bubbles: true }));
   });
 
-  // 键盘快捷键 Ctrl+1~3
+  // 键盘快捷键 Ctrl+1~4
   document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '3') {
+    if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '4') {
       e.preventDefault();
       const idx = parseInt(e.key, 10) - 1;
       const tab = tabs[idx];
@@ -76,6 +80,6 @@ export function init(container) {
     }
   });
 
-  /* ---- 默认激活第一个标签 ---- */
-  setActive('inbox');
+  /* ---- 默认激活对应视图的标签 ---- */
+  setActive(initialView);
 }

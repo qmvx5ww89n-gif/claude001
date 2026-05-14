@@ -3,9 +3,11 @@
  *
  * 布局：顶部工具栏 + 左侧需求列表 + 右侧任务单面板
  * 全宽布局，工具栏置顶。
+ *
+ * v2: 新增工时、截止日期、添加到待办/从待办移除、已完成状态
  */
 
-import { requirementStore, taskOrderStore, inboxStore } from '../services/storage.js';
+import { requirementStore, taskOrderStore, planStore, todoStore, getTodoCount } from '../services/storage.js';
 import { parse } from '../services/parser.js';
 import { breakdownRequirement } from './Todos.js';
 
@@ -20,6 +22,10 @@ const ICONS = {
   unlink: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="14" x2="21" y2="3"/><path d="M21 3l-6.5 18.4c-.5 1.1-1.9 1.2-2.6.2L7 14l-7.6-4.9c-1-.7-.9-2.1.2-2.6L18 0"/></svg>`,
   chevronDown: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
   chevronUp: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`,
+  todoAdd: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+  todoRemove: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  clock: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  calendar: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
 };
 
 function escapeHtml(str) {
@@ -28,15 +34,31 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function formatDateLabel(isoDate) {
+  if (!isoDate) return '';
+  const today = new Date().toISOString().split('T')[0];
+  const d = new Date(isoDate);
+  const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  if (isoDate === today) return '今天';
+  return `${isoDate.slice(5)} ${dayNames[d.getDay()]}`;
+}
+
+function isOverdue(item) {
+  if (item.status !== 'active' || !item.deadline) return false;
+  return item.deadline < new Date().toISOString().split('T')[0];
+}
+
 /* ================================================================== */
 /*  渲染                                                               */
 /* ================================================================== */
 
 function render(container) {
   const allReqs = requirementStore.getAll();
-  const activeReqs = allReqs.filter((r) => r.status !== 'archived');
+  const activeReqs = allReqs.filter((r) => r.status === 'active');
   const archivedReqs = allReqs.filter((r) => r.status === 'archived');
+  const completedReqs = allReqs.filter((r) => r.status === 'completed');
   const orders = taskOrderStore.getAll();
+  const allPlans = planStore.getAll().filter((p) => p.status === 'active');
 
   container.innerHTML = `
     <div class="rt-view">
@@ -45,10 +67,14 @@ function render(container) {
       <div class="rt-toolbar">
         <div class="rt-toolbar__group">
           <input type="text" class="rt-toolbar__input" id="rt-req-input" placeholder="新建需求..." />
+          <input type="number" class="rt-toolbar__input rt-toolbar__input--hours" id="rt-req-hours" placeholder="工时(h)" min="0" step="0.5" title="预估工时" />
+          <input type="date" class="rt-toolbar__input rt-toolbar__input--date" id="rt-req-date" title="截止日期" />
           <button class="btn btn--primary btn--sm" id="rt-req-add">${ICONS.plus} 添加需求</button>
         </div>
         <div class="rt-toolbar__group">
           <input type="text" class="rt-toolbar__input" id="rt-to-input" placeholder="新建任务单..." />
+          <input type="number" class="rt-toolbar__input rt-toolbar__input--hours" id="rt-to-hours" placeholder="工时(h)" min="0" step="0.5" title="预估工时" />
+          <input type="date" class="rt-toolbar__input rt-toolbar__input--date" id="rt-to-date" title="截止日期" />
           <button class="btn btn--primary btn--sm" id="rt-to-add">${ICONS.plus} 创建任务单</button>
         </div>
       </div>
@@ -72,6 +98,12 @@ function render(container) {
               ${archivedReqs.map((r) => renderReqCard(r)).join('')}
             </div>
           ` : ''}
+          ${completedReqs.length > 0 ? `
+            <div class="rt-panel__subheader">已完成 (${completedReqs.length})</div>
+            <div class="rt-panel__list" id="rt-req-list-completed">
+              ${completedReqs.map((r) => renderReqCard(r)).join('')}
+            </div>
+          ` : ''}
         </div>
 
         <!-- 右侧：任务单列表 -->
@@ -82,7 +114,7 @@ function render(container) {
           <div class="rt-panel__list" id="rt-to-list">
             ${orders.length === 0
               ? '<div class="rt-panel__empty">暂无任务单</div>'
-              : orders.map((o) => renderToCard(o)).join('')}
+              : orders.map((o) => renderToCard(o, allPlans)).join('')}
           </div>
         </div>
 
@@ -93,17 +125,31 @@ function render(container) {
 
 /* ---- 需求卡片 ---- */
 function renderReqCard(req) {
+  const hasTodos = getTodoCount('requirement', req.id) > 0;
+  const hoursDisplay = req.estimatedHours ? `${req.estimatedHours}h` : '';
+  const deadlineDisplay = req.deadline ? formatDateLabel(req.deadline) : '';
+  const overdue = isOverdue(req);
+
   return `
-    <div class="rt-req-item" data-id="${req.id}">
+    <div class="rt-req-item ${req.status !== 'active' ? 'rt-req-item--inactive' : ''}" data-id="${req.id}">
       <div class="rt-req-item__main">
         <div class="rt-req-item__title" id="rt-req-title-${req.id}">${escapeHtml(req.title)}</div>
+        <div class="rt-req-item__meta">
+          ${hoursDisplay ? `<span class="rt-req-item__tag tag--hours">${ICONS.clock} ${hoursDisplay}</span>` : ''}
+          ${deadlineDisplay ? `<span class="rt-req-item__tag tag--deadline ${overdue ? 'tag--overdue' : ''}">${ICONS.calendar} ${deadlineDisplay}</span>` : ''}
+          ${hasTodos ? `<span class="rt-req-item__tag tag--has-todos">已关联待办</span>` : ''}
+        </div>
       </div>
       <div class="rt-req-item__actions">
         <button class="btn-icon btn-icon--sm rt-req-item__breakdown" data-id="${req.id}" title="拆解为待办">${ICONS.plus}</button>
+        <button class="btn-icon btn-icon--sm rt-req-item__add-todo" data-id="${req.id}" title="添加到待办">${ICONS.todoAdd}</button>
+        ${hasTodos ? `<button class="btn-icon btn-icon--sm rt-req-item__remove-todo" data-id="${req.id}" title="从待办移除">${ICONS.todoRemove}</button>` : ''}
         <button class="btn-icon btn-icon--sm rt-req-item__edit" data-id="${req.id}" title="编辑">${ICONS.edit}</button>
         ${req.status === 'archived'
           ? `<button class="btn-icon btn-icon--sm rt-req-item__unarchive" data-id="${req.id}" title="激活">${ICONS.unarchive}</button>`
-          : `<button class="btn-icon btn-icon--sm rt-req-item__archive" data-id="${req.id}" title="归档">${ICONS.archive}</button>`
+          : req.status !== 'completed'
+            ? `<button class="btn-icon btn-icon--sm rt-req-item__archive" data-id="${req.id}" title="归档">${ICONS.archive}</button>`
+            : ''
         }
         <button class="btn-icon btn-icon--sm rt-req-item__delete" data-id="${req.id}" title="删除">${ICONS.trash}</button>
       </div>
@@ -112,45 +158,73 @@ function renderReqCard(req) {
 }
 
 /* ---- 任务单卡片 ---- */
-function renderToCard(order) {
+function renderToCard(order, allPlans) {
   const linkedReqs = order.requirementIds
     .map((id) => requirementStore.getById(id))
     .filter(Boolean);
+  const linkedPlans = (order.planIds || [])
+    .map((id) => planStore.getById(id))
+    .filter(Boolean);
   const availableReqs = requirementStore
     .getAll()
-    .filter((r) => r.status !== 'archived' && !order.requirementIds.includes(r.id));
+    .filter((r) => r.status === 'active' && !order.requirementIds.includes(r.id));
+  const availablePlans = allPlans.filter((p) => !(order.planIds || []).includes(p.id));
+  const hasTodos = getTodoCount('taskOrder', order.id) > 0;
+  const hoursDisplay = order.estimatedHours ? `${order.estimatedHours}h` : '';
+  const deadlineDisplay = order.deadline ? formatDateLabel(order.deadline) : '';
+  const overdue = isOverdue(order);
 
   return `
-    <div class="rt-to-item" data-id="${order.id}">
+    <div class="rt-to-item ${order.status !== 'active' ? 'rt-to-item--inactive' : ''}" data-id="${order.id}">
       <div class="rt-to-item__header">
         <span class="rt-to-item__name" id="rt-to-name-${order.id}">${escapeHtml(order.name)}</span>
-        <span class="rt-to-item__count">${linkedReqs.length}</span>
+        <span class="rt-to-item__count">${linkedReqs.length + linkedPlans.length}</span>
         <div class="rt-to-item__actions">
+          <button class="btn-icon btn-icon--sm rt-to-item__add-todo" data-id="${order.id}" title="添加到待办">${ICONS.todoAdd}</button>
+          ${hasTodos ? `<button class="btn-icon btn-icon--sm rt-to-item__remove-todo" data-id="${order.id}" title="从待办移除">${ICONS.todoRemove}</button>` : ''}
           <button class="btn-icon btn-icon--sm rt-to-item__edit" data-id="${order.id}" title="编辑">${ICONS.edit}</button>
           <button class="btn-icon btn-icon--sm rt-to-item__toggle" data-id="${order.id}" title="展开">${ICONS.chevronDown}</button>
           <button class="btn-icon btn-icon--sm rt-to-item__delete" data-id="${order.id}" title="删除">${ICONS.trash}</button>
         </div>
       </div>
+      ${hoursDisplay || deadlineDisplay ? `
+        <div class="rt-to-item__meta">
+          ${hoursDisplay ? `<span class="rt-to-item__tag tag--hours">${ICONS.clock} ${hoursDisplay}</span>` : ''}
+          ${deadlineDisplay ? `<span class="rt-to-item__tag tag--deadline ${overdue ? 'tag--overdue' : ''}">${ICONS.calendar} ${deadlineDisplay}</span>` : ''}
+        </div>
+      ` : ''}
       <div class="rt-to-item__body" id="rt-to-body-${order.id}">
-        <div class="rt-to-item__reqs" id="rt-to-reqs-${order.id}">
-          ${linkedReqs.length === 0
-            ? '<div class="rt-to-item__empty-req">暂无关联需求</div>'
-            : linkedReqs.map((r) => `
+        ${linkedPlans.length > 0 || linkedReqs.length > 0 ? `
+          <div class="rt-to-item__reqs" id="rt-to-reqs-${order.id}">
+            ${linkedPlans.map((p) => `
+              <div class="rt-to-item__req rt-to-item__req--plan">
+                <span>[计划] ${escapeHtml(p.title)}</span>
+                <button class="btn-icon btn-icon--sm rt-to-item__unlink-plan" data-id="${order.id}" data-plan-id="${p.id}" title="移除">${ICONS.unlink}</button>
+              </div>
+            `).join('')}
+            ${linkedReqs.map((r) => `
               <div class="rt-to-item__req">
                 <span>${escapeHtml(r.title)}</span>
                 <button class="btn-icon btn-icon--sm rt-to-item__unlink" data-id="${order.id}" data-req-id="${r.id}" title="移除">${ICONS.unlink}</button>
               </div>
             `).join('')}
-        </div>
-        ${availableReqs.length > 0 ? `
-          <div class="rt-to-item__link-row">
-            <select class="rt-to-item__select" id="rt-select-${order.id}">
-              <option value="">关联需求...</option>
-              ${availableReqs.map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join('')}
-            </select>
-            <button class="btn btn--sm btn--primary rt-to-item__link-btn" data-id="${order.id}">${ICONS.link}</button>
           </div>
-        ` : ''}
+        ` : '<div class="rt-to-item__empty-req">暂无关联需求或计划</div>'}
+        <div class="rt-to-item__link-row">
+          ${availableReqs.length > 0 ? `
+            <select class="rt-to-item__select" id="rt-req-select-${order.id}">
+              <option value="">关联需求...</option>
+              ${availableReqs.map((r) => `<option value="req:${r.id}">${escapeHtml(r.title)}</option>`).join('')}
+            </select>
+          ` : ''}
+          ${availablePlans.length > 0 ? `
+            <select class="rt-to-item__select" id="rt-plan-select-${order.id}">
+              <option value="">关联计划...</option>
+              ${availablePlans.map((p) => `<option value="plan:${p.id}">[计划] ${escapeHtml(p.title)}</option>`).join('')}
+            </select>
+          ` : ''}
+          <button class="btn btn--sm btn--primary rt-to-item__link-btn" data-id="${order.id}">${ICONS.link}</button>
+        </div>
       </div>
     </div>
   `;
@@ -168,6 +242,23 @@ function refresh() {
   }
 }
 
+/** 添加待办关联 */
+function addToTodos(sourceType, sourceId, title, dueDate) {
+  todoStore.add({ title, sourceType, sourceId, dueDate: dueDate || null });
+  refresh();
+}
+
+/** 移除待办关联 */
+function removeFromTodos(sourceType, sourceId) {
+  const todos = todoStore.getAll().filter(
+    (t) => t.sourceType === sourceType && t.sourceId === sourceId
+  );
+  for (const t of todos) {
+    todoStore.update(t.id, { sourceType: null, sourceId: null });
+  }
+  refresh();
+}
+
 /* ================================================================== */
 /*  事件                                                               */
 /* ================================================================== */
@@ -175,12 +266,19 @@ function refresh() {
 function bindEvents() {
   // ---- 新建需求 ----
   const reqInput = document.querySelector('#rt-req-input');
+  const reqHours = document.querySelector('#rt-req-hours');
+  const reqDate = document.querySelector('#rt-req-date');
   const reqAddBtn = document.querySelector('#rt-req-add');
   function addReq() {
     const v = reqInput.value.trim();
     if (!v) return;
-    requirementStore.add({ title: v });
+    requirementStore.add({
+      title: v,
+      estimatedHours: reqHours.value ? parseFloat(reqHours.value) : null,
+      deadline: reqDate.value || null,
+    });
     reqInput.value = '';
+    if (reqHours) reqHours.value = '';
     reqInput.focus();
     refresh();
   }
@@ -191,12 +289,19 @@ function bindEvents() {
 
   // ---- 新建任务单 ----
   const toInput = document.querySelector('#rt-to-input');
+  const toHours = document.querySelector('#rt-to-hours');
+  const toDate = document.querySelector('#rt-to-date');
   const toAddBtn = document.querySelector('#rt-to-add');
   function addTo() {
     const v = toInput.value.trim();
     if (!v) return;
-    taskOrderStore.add({ name: v });
+    taskOrderStore.add({
+      name: v,
+      estimatedHours: toHours?.value ? parseFloat(toHours.value) : null,
+      deadline: toDate?.value || null,
+    });
     toInput.value = '';
+    if (toHours) toHours.value = '';
     toInput.focus();
     refresh();
   }
@@ -212,7 +317,6 @@ function bindEvents() {
       const titleEl = document.querySelector(`#rt-req-title-${id}`);
       const current = requirementStore.getById(id);
       if (!titleEl || !current) return;
-
       titleEl.innerHTML = `<input type="text" class="rt-inline-input" value="${escapeHtml(current.title)}" id="rt-req-edit-${id}" />`;
       const inp = titleEl.querySelector('input');
       inp.focus(); inp.select();
@@ -254,6 +358,36 @@ function bindEvents() {
     });
   });
 
+  // ---- 需求：添加到待办 ----
+  document.querySelectorAll('.rt-req-item__add-todo').forEach((b) => {
+    b.addEventListener('click', () => {
+      const req = requirementStore.getById(b.dataset.id);
+      if (req) addToTodos('requirement', req.id, req.title, req.deadline);
+    });
+  });
+
+  // ---- 需求：从待办移除 ----
+  document.querySelectorAll('.rt-req-item__remove-todo').forEach((b) => {
+    b.addEventListener('click', () => {
+      removeFromTodos('requirement', b.dataset.id);
+    });
+  });
+
+  // ---- 任务单：添加到待办 ----
+  document.querySelectorAll('.rt-to-item__add-todo').forEach((b) => {
+    b.addEventListener('click', () => {
+      const order = taskOrderStore.getById(b.dataset.id);
+      if (order) addToTodos('taskOrder', order.id, order.name, order.deadline);
+    });
+  });
+
+  // ---- 任务单：从待办移除 ----
+  document.querySelectorAll('.rt-to-item__remove-todo').forEach((b) => {
+    b.addEventListener('click', () => {
+      removeFromTodos('taskOrder', b.dataset.id);
+    });
+  });
+
   // ---- 任务单：编辑 ----
   document.querySelectorAll('.rt-to-item__edit').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -289,20 +423,29 @@ function bindEvents() {
     });
   });
 
-  // ---- 任务单：关联需求 ----
+  // ---- 任务单：关联需求/计划 ----
   document.querySelectorAll('.rt-to-item__link-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.id;
-      const sel = document.querySelector(`#rt-select-${id}`);
-      if (!sel || !sel.value) return;
       const order = taskOrderStore.getById(id);
       if (!order) return;
-      taskOrderStore.update(id, { requirementIds: [...order.requirementIds, sel.value] });
+
+      const reqSelect = document.querySelector(`#rt-req-select-${id}`);
+      const planSelect = document.querySelector(`#rt-plan-select-${id}`);
+
+      if (reqSelect && reqSelect.value && reqSelect.value.startsWith('req:')) {
+        const reqId = reqSelect.value.slice(4);
+        taskOrderStore.update(id, { requirementIds: [...order.requirementIds, reqId] });
+      }
+      if (planSelect && planSelect.value && planSelect.value.startsWith('plan:')) {
+        const planId = planSelect.value.slice(5);
+        taskOrderStore.update(id, { planIds: [...(order.planIds || []), planId] });
+      }
       refresh();
     });
   });
 
-  // ---- 任务单：移除关联 ----
+  // ---- 任务单：移除关联需求 ----
   document.querySelectorAll('.rt-to-item__unlink').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.id;
@@ -310,6 +453,18 @@ function bindEvents() {
       const order = taskOrderStore.getById(id);
       if (!order) return;
       taskOrderStore.update(id, { requirementIds: order.requirementIds.filter((rid) => rid !== reqId) });
+      refresh();
+    });
+  });
+
+  // ---- 任务单：移除关联计划 ----
+  document.querySelectorAll('.rt-to-item__unlink-plan').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const planId = btn.dataset.planId;
+      const order = taskOrderStore.getById(id);
+      if (!order) return;
+      taskOrderStore.update(id, { planIds: (order.planIds || []).filter((pid) => pid !== planId) });
       refresh();
     });
   });
@@ -333,7 +488,6 @@ export function init(container) {
   bindEvents();
 }
 
-/** 暴露转换函数供 Inbox 使用 */
 export { breakdownRequirement } from './Todos.js';
 
 export function convertFromInbox(inboxItem) {
@@ -341,5 +495,7 @@ export function convertFromInbox(inboxItem) {
   requirementStore.add({
     title: parsed.title || inboxItem.content,
     sourceInboxId: inboxItem.id,
+    estimatedHours: null,
+    deadline: parsed.recognizedDate || null,
   });
 }
